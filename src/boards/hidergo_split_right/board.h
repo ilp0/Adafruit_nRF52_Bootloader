@@ -57,8 +57,10 @@
 #define USB_DESC_UF2_PID       0x615E
 #define USB_DESC_CDC_ONLY_PID  0x615E
 
-#define UF2_PRODUCT_NAME  "hid_ergo_split"
-#define UF2_VOLUME_LABEL  "HID_ERGO_SPLIT"
-#define UF2_BOARD_ID      "nRF52833-hid_ergo_split"
+#define UF2_PRODUCT_NAME  "split_test"
+#define UF2_VOLUME_LABEL  "split_test"
+#define UF2_BOARD_ID      "nRF52833_split"
+#define UF2_INDEX_URL     "http://bluemicro.jpconstantineau.com/"
+
 
 #endif // _HID_ERGO_SPLIT_H
