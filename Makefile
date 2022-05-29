@@ -262,8 +262,6 @@ CFLAGS += \
 	-fno-strict-aliasing \
 	-Wall \
 	-Wextra \
-	-Werror \
-	-Wfatal-errors \
 	-Werror-implicit-function-declaration \
 	-Wfloat-equal \
 	-Wundef \
