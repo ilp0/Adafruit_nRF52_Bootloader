@@ -19,6 +19,7 @@ jobs:
           - 'circuitplayground_nrf52840'
           - 'clue_nrf52840'
           - 'feather_nrf52832'
+          - 'feather_nrf52833_express'
           - 'feather_nrf52840_express'
           - 'feather_nrf52840_sense'
           - 'itsybitsy_nrf52840_express'
@@ -34,6 +35,7 @@ jobs:
           - 'bast_ble'
           - 'bluemicro_nrf52833'
           - 'bluemicro_nrf52840'
+          - 'challenger_840_ble'
           - 'ebyte_e104_bt5032a'
           - 'ebyte_e73_tbb'
           - 'electronut_labs_papyr'
@@ -59,41 +61,40 @@ jobs:
 
     steps:
     - name: Setup Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v3
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v1
-      
     - name: Checkout Code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v3
       with:
+        fetch-depth: 0
         submodules: true
 
     - name: Checkout linkermap
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
          repository: hathach/linkermap
          path: linkermap
-        
-    - name: Install Toolchains
+
+    - name: Install ARM GCC
+      uses: carlosperate/arm-none-eabi-gcc-action@v1
+      with:
+        release: '10-2020-q4'
+
+    - name: Install Tools
       run: |
         pip3 install adafruit-nrfutil uritemplate requests intelhex
         pip3 install linkermap/
-        npm install --global xpm
-        # 9.3.1-1.2.1 is xpack modified version which significantly increased compiled size to 6-7KB and cause flash overflow.
-        # Skip this version for now, we will try again with next official release from ARM
-        xpm install --global @xpack-dev-tools/arm-none-eabi-gcc@9.3.1-1.1.1
-        echo `echo $HOME/.local/xPacks/@xpack-dev-tools/arm-none-eabi-gcc/*/.content/bin` >> $GITHUB_PATH
-    
+
     - name: Build
       run: |
+        arm-none-eabi-gcc --version
         make BOARD=${{ matrix.board }} all
         make BOARD=${{ matrix.board }} copy-artifact
 
     - name: Linker Map
       run: make BOARD=${{ matrix.board }} linkermap
-      
-    - uses: actions/upload-artifact@v2
+
+    - uses: actions/upload-artifact@v3
       with:
         name: ${{ matrix.board }}
         path: _bin/${{ matrix.board }}
