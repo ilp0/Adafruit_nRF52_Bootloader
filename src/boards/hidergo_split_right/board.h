@@ -48,7 +48,7 @@
 // BLE OTA
 //--------------------------------------------------------------------+
 #define BLEDIS_MANUFACTURER  "hid:ergo"
-#define BLEDIS_MODEL         "split"
+#define BLEDIS_MODEL         "Disconnect MK1"
 
 //--------------------------------------------------------------------+
 // USB
@@ -57,8 +57,8 @@
 #define USB_DESC_UF2_PID       0x6163
 #define USB_DESC_CDC_ONLY_PID  0x6163
 
-#define UF2_PRODUCT_NAME  "split_test"
-#define UF2_VOLUME_LABEL  "split_test"
+#define UF2_PRODUCT_NAME  "Disconnect"
+#define UF2_VOLUME_LABEL  "Disconnect"
 #define UF2_BOARD_ID      "nRF52833_split"
 #define UF2_INDEX_URL     "http://bluemicro.jpconstantineau.com/"
 
