@@ -1,5 +1,4 @@
 #include "boards.h"
-#include "board.h"
 #include "uf2/configkeys.h"
 
 __attribute__((used, section(".bootloaderConfig")))
@@ -18,10 +17,3 @@ const uint32_t bootloaderConfig[] =
   0, 0, 0, 0, 0, 0, 0, 0
   /* CF2 END */
 };
-
-void board_init2(void)
-{
-  // Turn LDO on
-  nrf_gpio_cfg_output(LDO_CONTROL_PIN);
-  nrf_gpio_pin_write(LDO_CONTROL_PIN, 1);
-}

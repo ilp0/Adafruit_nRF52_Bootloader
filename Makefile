@@ -10,6 +10,9 @@
 # local customization
 -include Makefile.user
 
+# Board specific
+-include src/boards/$(BOARD)/board.mk
+
 SDK_PATH     = lib/sdk/components
 SDK11_PATH   = lib/sdk11/components
 TUSB_PATH    = lib/tinyusb/src
@@ -18,7 +21,11 @@ SD_PATH      = lib/softdevice/$(SD_FILENAME)
 
 # SD_VERSION can be overwritten by board.mk
 ifndef SD_VERSION
-SD_VERSION   = 6.1.1
+	ifeq ($(MCU_SUB_VARIANT),nrf52833)
+	SD_VERSION = 7.3.0
+	else
+	SD_VERSION = 6.1.1
+	endif
 endif
 
 SD_FILENAME  = $(SD_NAME)_nrf52_$(SD_VERSION)
@@ -28,9 +35,9 @@ MBR_HEX			 = lib/softdevice/mbr/hex/mbr_nrf52_2.4.1_mbr.hex
 
 # linker by MCU eg. nrf52840.ld
 ifeq ($(DEBUG), 1)
-  LD_FILE    = linker/$(MCU_SUB_VARIANT)_debug.ld
+  LD_FILE = linker/$(MCU_SUB_VARIANT)_debug.ld
 else
-  LD_FILE    = linker/$(MCU_SUB_VARIANT).ld
+  LD_FILE = linker/$(MCU_SUB_VARIANT).ld
 endif
 
 GIT_VERSION := $(shell git describe --dirty --always --tags)
@@ -41,6 +48,8 @@ OUT_NAME = $(BOARD)_bootloader-$(GIT_VERSION)
 
 # merged file = compiled + sd
 MERGED_FILE = $(OUT_NAME)_$(SD_NAME)_$(SD_VERSION)
+
+UF2_FAMILY_ID_BOOTLOADER = 0xd663823c
 
 #------------------------------------------------------------------------------
 # Tool Configure
@@ -89,24 +98,9 @@ endif
 BMP_PORT ?= $(shell ls -1 /dev/cu.usbmodem????????1 | head -1)
 GDB_BMP = $(GDB) -ex 'target extended-remote $(BMP_PORT)' -ex 'monitor swdp_scan' -ex 'attach 1'
 
-#---------------------------------
-# Select the board to build
-#---------------------------------
-# Note: whitespace is not allowed in the filenames... it WILL break this part of the script
-BOARD_LIST = $(sort $(filter-out boards.h boards.c,$(notdir $(wildcard src/boards/*))))
-
-ifeq ($(filter $(BOARD),$(BOARD_LIST)),)
-  $(info You must provide a BOARD parameter with 'BOARD='. Supported boards are:)
-  $(foreach b,$(BOARD_LIST),$(info - $(b)))
-  $(error Invalid BOARD specified)
-endif
-
 # Build directory
 BUILD = _build/build-$(BOARD)
 BIN = _bin/$(BOARD)
-
-# Board specific
--include src/boards/$(BOARD)/board.mk
 
 # MCU_SUB_VARIANT can be nrf52 (nrf52832), nrf52833, nrf52840
 ifeq ($(MCU_SUB_VARIANT),nrf52)
@@ -123,6 +117,7 @@ else ifeq ($(MCU_SUB_VARIANT),nrf52840)
   SD_NAME = s140
   DFU_DEV_REV = 52840
   CFLAGS += -DNRF52840_XXAA -DS140
+  # App reserved 40KB (8+32) to match circuitpython for 840
   DFU_APP_DATA_RESERVED=10*4096
 else
   $(error Sub Variant $(MCU_SUB_VARIANT) is unknown)
@@ -138,6 +133,8 @@ C_SRC += \
   src/dfu_init.c \
   src/flash_nrf5x.c \
   src/main.c \
+  src/screen.c \
+  src/images.c \
 
 # all files in boards
 C_SRC += src/boards/boards.c
@@ -311,6 +308,7 @@ ifneq ($(USE_NFCT),yes)
 endif
 
 CFLAGS += -DSOFTDEVICE_PRESENT
+CFLAGS += -DUF2_VERSION_BASE='"$(GIT_VERSION)"'
 CFLAGS += -DUF2_VERSION='"$(GIT_VERSION) $(GIT_SUBMODULE_VERSIONS)"'
 CFLAGS += -DBLEDIS_FW_VERSION='"$(GIT_VERSION) $(SD_NAME) $(SD_VERSION)"'
 
@@ -325,9 +323,9 @@ ifeq ($(DEBUG), 1)
   C_SRC += $(RTT_SRC)/RTT/SEGGER_RTT.c
   DFU_APP_DATA_RESERVED = 0
 
-	# expand bootloader address to 28KB of reserved app
+	# expand bootloader address to 28KB/40KB of reserved app
   ifeq ($(MCU_SUB_VARIANT),nrf52840)
-    CFLAGS += -DBOOTLOADER_REGION_START=0xED000
+    CFLAGS += -DBOOTLOADER_REGION_START=0xEA000
   else
     CFLAGS += -DBOOTLOADER_REGION_START=0x6D000
   endif
@@ -336,7 +334,8 @@ endif
 CFLAGS += -DDFU_APP_DATA_RESERVED=$(DFU_APP_DATA_RESERVED)
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105523
-ifneq ($(findstring 12.,$(shell $(CC) --version 2>/dev/null)),)
+# Fixes for gcc version 12 and 13.
+ifneq (,$(filter 12.% 13.%,$(shell $(CC) -dumpversion 2>/dev/null)))
 	CFLAGS += --param=min-pagesize=0
 endif
 
@@ -347,6 +346,7 @@ endif
 LDFLAGS += \
 	$(CFLAGS) \
 	-Wl,-L,linker -Wl,-T,$(LD_FILE) \
+	-Wl,--print-memory-usage \
 	-Wl,-Map=$@.map -Wl,-cref -Wl,-gc-sections \
 	-specs=nosys.specs -specs=nano.specs
 
@@ -435,7 +435,7 @@ $(BUILD)/$(OUT_NAME)_nosd.hex: $(BUILD)/$(OUT_NAME).hex
 # Bootolader self-update uf2
 $(BUILD)/update-$(OUT_NAME)_nosd.uf2: $(BUILD)/$(OUT_NAME)_nosd.hex
 	@echo Create $(notdir $@)
-	@python3 lib/uf2/utils/uf2conv.py -f 0xd663823c -c -o $@ $^
+	@python3 lib/uf2/utils/uf2conv.py -f $(UF2_FAMILY_ID_BOOTLOADER) -c -o $@ $^
 
 # merge bootloader and sd hex together
 $(BUILD)/$(MERGED_FILE).hex: $(BUILD)/$(OUT_NAME).hex
@@ -487,6 +487,11 @@ mbr: flash-mbr
 flash-mbr:
 	@echo Flashing: $(MBR_HEX)
 	$(call FLASH_NOUICR_CMD,$(MBR_HEX))
+
+# flash using uf2
+flash-uf2: $(BUILD)/update-$(OUT_NAME)_nosd.uf2
+	@echo Flashing: $(notdir $<)
+	python lib/uf2/utils/uf2conv.py -f $(UF2_FAMILY_ID_BOOTLOADER) --deploy $<
 
 # dfu with adafruit-nrfutil using CDC interface
 dfu-flash: flash-dfu
